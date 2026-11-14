@@ -1,6 +1,7 @@
 package com.libertad.ridedecider
 
 import android.app.ActivityOptions
+import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Rect
 import android.net.Uri
@@ -8,7 +9,6 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.Toolbar
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -73,7 +73,35 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
         })
 
+        root.addView(Button(this).apply {
+            text = "Buscar actualización"
+            setOnClickListener { checkForUpdate(showNoUpdateMessage = true) }
+        })
+
         setContentView(root)
+
+        // Chequeo automático y silencioso cada vez que se abre la app; si no hay
+        // nada nuevo no interrumpe con ningún cartel.
+        checkForUpdate(showNoUpdateMessage = false)
+    }
+
+    private fun checkForUpdate(showNoUpdateMessage: Boolean) {
+        UpdateChecker.checkForUpdate { info ->
+            if (info != null && UpdateChecker.isNewer(info)) {
+                AlertDialog.Builder(this)
+                    .setTitle("Hay una versión nueva")
+                    .setMessage("${info.releaseLabel}\n\nSe va a descargar sola; cuando termine, confirmá la instalación con un toque.")
+                    .setPositiveButton("Descargar") { _, _ -> UpdateChecker.downloadAndInstall(this, info) }
+                    .setNegativeButton("Ahora no", null)
+                    .show()
+            } else if (showNoUpdateMessage) {
+                AlertDialog.Builder(this)
+                    .setTitle("Ride Decider")
+                    .setMessage("Ya tenés la última versión (o no se pudo consultar GitHub ahora).")
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
+        }
     }
 
     private fun requestOverlayPermission() {

@@ -13,10 +13,17 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0-skeleton"
+
+        // Número de build inyectado por CI (-PbuildNumber=<github.run_number>).
+        // Es lo que la app compara contra el último release de GitHub para saber
+        // si hay una versión más nueva. En un build local (Android Studio) queda
+        // en 0, así que nunca se va a "autoactualizar" a algo más viejo.
+        buildConfigField("int", "BUILD_NUMBER", "${project.findProperty("buildNumber") ?: 0}")
     }
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     compileOptions {

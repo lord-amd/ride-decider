@@ -1,14 +1,22 @@
 name: Build APK
 
 # Compila el APK automáticamente en los servers de GitHub, sin necesidad de Android
-# Studio local. Se dispara con cada push/PR a main, y también se puede disparar a mano
+# Studio local. Se dispara con cada push a main, y también se puede disparar a mano
 # desde la pestaña "Actions" del repo (workflow_dispatch).
+#
+# Además de dejar el APK como artifact del run (para bajarlo a mano), publica un
+# GitHub Release con tag "build-<número de run>" y el APK como asset — eso es lo que
+# la app misma consulta (UpdateChecker.kt) para autoactualizarse. Por eso el repo
+# necesita ser público: la app no lleva ningún token adentro para poder leerlo.
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch: {}
+
+permissions:
+  contents: write   # necesario para que el job pueda crear el Release
 
 jobs:
   build:
@@ -33,8 +41,10 @@ jobs:
       - name: Aceptar licencias del Android SDK
         run: yes | sdkmanager --licenses || true
 
+      # buildNumber = github.run_number queda grabado en BuildConfig.BUILD_NUMBER
+      # dentro del APK, y es lo que la app compara contra el tag del release.
       - name: Compilar APK debug
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon -PbuildNumber=${{ github.run_number }}
 
       - name: Subir APK como artifact
         uses: actions/upload-artifact@v4
@@ -42,3 +52,17 @@ jobs:
           name: ride-decider-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      # Solo en push a main (no en PRs): publica el release que la app usa para
+      # autoactualizarse. Si el repo todavía es privado, este paso de todos modos
+      # funciona (el token de Actions sí tiene acceso); lo que no va a andar hasta
+      # que lo hagas público es que LA APP instalada pueda leer /releases/latest.
+      - name: Publicar GitHub Release con el APK
+        if: github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "build-${{ github.run_number }}" \
+            app/build/outputs/apk/debug/app-debug.apk \
+            --title "Build ${{ github.run_number }}" \
+            --notes "Compilación automática desde ${{ github.sha }}"

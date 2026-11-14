@@ -47,6 +47,26 @@ Comisión por app: como ya no hay un enum fijo, `CommissionConfig` tiene una com
 opcionales por packageName** para las apps que ya conocés y cuya comisión real
 querés afinar (configurable en la pantalla de Settings, un override por línea).
 
+## Autoactualización (la app se revisa sola contra GitHub)
+
+Cada push a `main` compila el APK Y publica un GitHub Release (`build-<N>`) con ese
+APK como asset. Al abrir la app (`MainActivity`), `UpdateChecker.kt` consulta
+`GET /repos/lord-amd/ride-decider/releases/latest` (sin token: por eso el repo tiene
+que ser **público**), compara el número de build contra `BuildConfig.BUILD_NUMBER`
+(el que quedó grabado en el APK instalado al compilarlo), y si hay uno más nuevo te
+pregunta si querés descargarlo. Si confirmás, lo baja con el `DownloadManager` del
+sistema y abre el instalador de Android automáticamente.
+
+Lo que Android NO permite, por seguridad, es que una app instalada por fuera de Play
+Store se reemplace a sí misma en silencio sin que vos confirmes con un toque en el
+instalador — eso aplica a cualquier app sideloaded, no es una limitación de este
+proyecto. Lo que sí queda resuelto: nunca más tenés que ir a buscar el APK a mano,
+la app te avisa y te lo deja descargado, listo para instalar con un toque.
+
+Primera vez que instales una actualización, Android te va a pedir el permiso
+"Instalar apps desconocidas" para Ride Decider — es el mismo permiso de siempre al
+sideloadear, se pide una sola vez.
+
 ## Compilación automática con GitHub Actions
 
 Se agregó `.github/workflows/build.yml`: cada vez que hagas push a `main` (o abras un

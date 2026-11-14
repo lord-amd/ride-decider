@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Coincide con Environment.DIRECTORY_DOWNLOADS dentro del almacenamiento
+         propio de la app, donde UpdateChecker guarda el APK descargado. -->
+    <external-files-path name="downloads" path="Download/" />
+</paths>
