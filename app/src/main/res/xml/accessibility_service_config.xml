@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowContentChanged|typeWindowStateChanged|typeViewTextChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRequestFilterKeyEvents|flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:notificationTimeout="150"
+    android:description="@string/accessibility_service_description" />
+<!--
+  A propósito NO se restringe android:packageNames: el servicio recibe eventos de
+  CUALQUIER app en pantalla, y es RideAccessibilityService (en código) el que, con
+  GenericOfferParser, decide por sí solo si lo que ve en cada ventana "parece una
+  oferta de viaje" o no — sin importar qué app sea. Así no hace falta tocar este
+  archivo ni el código cuando una app se actualiza o cuando usás una app nueva.
+-->

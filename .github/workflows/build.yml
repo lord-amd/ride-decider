@@ -1,0 +1,44 @@
+name: Build APK
+
+# Compila el APK automáticamente en los servers de GitHub, sin necesidad de Android
+# Studio local. Se dispara con cada push/PR a main, y también se puede disparar a mano
+# desde la pestaña "Actions" del repo (workflow_dispatch).
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # No se versionó gradlew/gradle-wrapper.jar en este esqueleto (ver README), así
+      # que esta acción instala Gradle directamente en el runner con la versión pedida.
+      - name: Instalar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: Aceptar licencias del Android SDK
+        run: yes | sdkmanager --licenses || true
+
+      - name: Compilar APK debug
+        run: gradle assembleDebug --no-daemon
+
+      - name: Subir APK como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ride-decider-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
