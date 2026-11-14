@@ -26,6 +26,21 @@ android {
         buildConfig = true
     }
 
+    // Clave de firma FIJA para el build de debug (versionada en /keystore/debug.keystore).
+    // Sin esto, cada corrida de GitHub Actions arranca de una VM nueva sin ningún
+    // debug.keystore previo, Gradle genera uno random, y cada APK queda firmado con
+    // una clave distinta -> Android rechaza instalar la versión nueva encima de la
+    // vieja ("error interno" / conflicto de firma). Con una clave fija, todos los
+    // builds (locales o de CI) firman igual y las actualizaciones instalan limpio.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("${rootProject.projectDir}/keystore/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -35,6 +50,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
         }
