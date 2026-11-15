@@ -21,12 +21,25 @@ import android.view.accessibility.AccessibilityNodeInfo
  */
 object GenericOfferParser {
 
-    // Monto: "$450", "$ 1.234,50", "ARS 450", "450 ARS". Acepta separador de miles '.' y
-    // decimal ',' (formato argentino) o viceversa; nos quedamos con el entero más grande
-    // razonable como tarifa (ignoramos centavos).
-    private val moneyPattern = Regex("""(?:\$|ARS|AR\$)\s*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)""", RegexOption.IGNORE_CASE)
+    // Monto con el símbolo ANTES del número: "$450", "$ 1.234,50", "ARS 450" (formato de
+    // DiDi, por ejemplo).
+    private val moneyPrefixPattern = Regex("""(?:\$|ARS|AR\$)\s*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)""", RegexOption.IGNORE_CASE)
+
+    // Monto con el símbolo DESPUÉS del número: "3.256 ARS" (formato de Uber). El
+    // "(?!\s*/)" evita confundir esto con una tarifa POR KILÓMETRO como "693 ARS/km",
+    // que es una referencia de la zona, no el monto total ofrecido.
+    private val moneySuffixPattern = Regex("""(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)\s*(?:ARS|AR\$)\b(?!\s*/)""", RegexOption.IGNORE_CASE)
+
+    // Distancia y tiempo casi siempre aparecen juntos como "X min (Y km)" tanto para la
+    // distancia hasta el pasajero ("A 3 min (0,9 km) de distancia") como para el viaje
+    // completo ("Viaje de 10 min (3,8 km)" / "14 min (6,5 km)"). Buscamos ese patrón
+    // combinado en vez de "km" y "min" sueltos, así no mezclamos un número de km con un
+    // tiempo de otra parte de la pantalla que no tiene nada que ver.
+    private val minKmPairPattern = Regex("""(\d+(?:[.,]\d+)?)\s*min\.?\s*\(\s*(\d+(?:[.,]\d+)?)\s*km\s*\)""", RegexOption.IGNORE_CASE)
+
+    // Respaldo si una app no usa el formato "min (km)" de arriba: km y min sueltos.
     private val kmPattern = Regex("""(\d+(?:[.,]\d+)?)\s*km\b""", RegexOption.IGNORE_CASE)
-    private val minPattern = Regex("""(\d+)\s*min\b""", RegexOption.IGNORE_CASE)
+    private val minPattern = Regex("""(\d+(?:[.,]\d+)?)\s*min\b""", RegexOption.IGNORE_CASE)
 
     // Palabras clave que, si aparecen como texto propio (label), ayudan a confirmar que
     // estamos en una pantalla de solicitud de viaje y no en otra pantalla cualquiera de
@@ -41,6 +54,8 @@ object GenericOfferParser {
         val fareGross: Double?,
         val distanceKm: Double?,
         val etaMinutes: Double?,
+        val pickupDistanceKm: Double? = null,
+        val pickupEtaMinutes: Double? = null,
         val rawText: String
     )
 
@@ -60,27 +75,62 @@ object GenericOfferParser {
         if (texts.isEmpty()) return null
         val joined = texts.joinToString(" ")
 
-        val fare = moneyPattern.find(joined)?.groupValues?.get(1)?.let { normalizeNumber(it) }
-        val km = kmPattern.find(joined)?.groupValues?.get(1)?.let { normalizeNumber(it) }
-        val min = minPattern.find(joined)?.groupValues?.get(1)?.toDoubleOrNull()
+        // El monto puede venir con el símbolo antes ("$4.200", DiDi) o después
+        // ("3.256 ARS", Uber). Probamos los dos formatos.
+        val fare = (moneyPrefixPattern.find(joined) ?: moneySuffixPattern.find(joined))
+            ?.groupValues?.get(1)?.let { normalizeNumber(it) }
+
+        // Buscamos TODAS las apariciones de "X min (Y km)". Cuando hay dos (caso típico:
+        // una app muestra primero cuánto falta para llegar a buscar al pasajero, y
+        // después la distancia/tiempo del viaje en sí), la PRIMERA es la de recogida y la
+        // ÚLTIMA es la del viaje completo. Cuando solo hay una, la tratamos como el viaje
+        // completo (no se detectó una distancia de recogida separada).
+        val pairs = minKmPairPattern.findAll(joined).toList()
+        var tripKm: Double? = null
+        var tripMin: Double? = null
+        var pickupKm: Double? = null
+        var pickupMin: Double? = null
+        when {
+            pairs.size >= 2 -> {
+                pickupMin = pairs.first().groupValues[1].let { normalizeNumber(it) }
+                pickupKm = pairs.first().groupValues[2].let { normalizeNumber(it) }
+                tripMin = pairs.last().groupValues[1].let { normalizeNumber(it) }
+                tripKm = pairs.last().groupValues[2].let { normalizeNumber(it) }
+            }
+            pairs.size == 1 -> {
+                tripMin = pairs.first().groupValues[1].let { normalizeNumber(it) }
+                tripKm = pairs.first().groupValues[2].let { normalizeNumber(it) }
+            }
+            else -> {
+                // Respaldo: ninguna app usa el formato "min (km)" acá, buscamos sueltos.
+                tripKm = kmPattern.find(joined)?.groupValues?.get(1)?.let { normalizeNumber(it) }
+                tripMin = minPattern.find(joined)?.groupValues?.get(1)?.let { normalizeNumber(it) }
+            }
+        }
 
         val hasKeyword = contextKeywords.any { kw -> texts.any { it.contains(kw, ignoreCase = true) } }
 
         // Umbral mínimo para considerar "esto es una oferta real" y no ruido de otra
         // pantalla: necesitamos al menos el monto, y al menos uno de (distancia, tiempo),
         // O el monto más una palabra clave de contexto.
-        val looksLikeOffer = fare != null && (km != null || min != null || hasKeyword)
+        val looksLikeOffer = fare != null && (tripKm != null || tripMin != null || hasKeyword)
         if (!looksLikeOffer) return null
 
         return ParsedOffer(
             fareGross = fare,
-            distanceKm = km,
-            etaMinutes = min,
+            distanceKm = tripKm,
+            etaMinutes = tripMin,
+            pickupDistanceKm = pickupKm,
+            pickupEtaMinutes = pickupMin,
             rawText = joined
         )
     }
 
-    /** "1.234,50" -> 1234.50 ; "1,234.50" -> 1234.50 ; "450" -> 450.0 */
+    /**
+     * "1.234,50" -> 1234.50 ; "1,234.50" -> 1234.50 ; "450" -> 450.0 ; "4.200" -> 4200.0
+     * (formato argentino: "." como separador de miles, sin centavos) ; "4.20" -> 4.20
+     * (un solo punto seguido de 1 o 2 dígitos se interpreta como decimal, no como miles).
+     */
     private fun normalizeNumber(raw: String): Double? {
         val hasComma = raw.contains(',')
         val hasDot = raw.contains('.')
@@ -94,7 +144,14 @@ object GenericOfferParser {
                 }
             }
             hasComma -> raw.replace(",", ".") // formato "450,50" -> decimal
-            else -> raw // solo punto o solo dígitos: Double.toDoubleOrNull lo interpreta bien
+            hasDot -> {
+                // Un solo punto: si va seguido de exactamente 3 dígitos es separador de
+                // miles argentino ("4.200" = 4200), no un decimal; si va seguido de 1 o 2
+                // dígitos es un decimal normal ("4.20" = 4.20).
+                val afterLastDot = raw.substringAfterLast('.')
+                if (afterLastDot.length == 3) raw.replace(".", "") else raw
+            }
+            else -> raw // solo dígitos: Double.toDoubleOrNull lo interpreta bien
         }
         return cleaned.toDoubleOrNull()
     }

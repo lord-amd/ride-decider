@@ -5,9 +5,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.libertad.ridedecider.ocr.ScreenOcrHelper
 import com.libertad.ridedecider.parsers.GenericOfferParser
+import com.libertad.ridedecider.parsers.collectTexts
 import com.libertad.ridedecider.parsers.screenBounds
 
 /**
@@ -93,12 +95,20 @@ class RideAccessibilityService : AccessibilityService() {
                             fareGross = parsed.fareGross,
                             distanceKm = parsed.distanceKm,
                             etaMinutes = parsed.etaMinutes,
+                            pickupDistanceKm = parsed.pickupDistanceKm,
                             windowBounds = bounds,
                             rawText = parsed.rawText,
                             sourceConfidence = Confidence.HIGH
                         )
                     )
                 } else {
+                    // Diagnóstico: si en algún momento se puede conectar el tablet a una
+                    // PC con `adb logcat -s RideParser`, esto muestra exactamente qué
+                    // texto ve el Accessibility Service en esta ventana, para ajustar
+                    // las expresiones de búsqueda si algo no se detecta bien.
+                    val debugTexts = collectTexts(root).joinToString(" | ").take(400)
+                    Log.d("RideParser", "$pkg sin oferta detectada. Texto visto: $debugTexts")
+
                     // Árbol de accesibilidad no dio nada útil -> probar OCR recortando
                     // justo esta región de pantalla (puede ser que la app bloquee el
                     // árbol con FLAG_SECURE o use vistas custom tipo Canvas/OpenGL).
@@ -111,6 +121,7 @@ class RideAccessibilityService : AccessibilityService() {
                                     fareGross = ocrParsed.fareGross,
                                     distanceKm = ocrParsed.distanceKm,
                                     etaMinutes = ocrParsed.etaMinutes,
+                                    pickupDistanceKm = ocrParsed.pickupDistanceKm,
                                     windowBounds = bounds,
                                     rawText = ocrParsed.rawText,
                                     sourceConfidence = Confidence.LOW

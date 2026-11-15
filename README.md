@@ -36,6 +36,28 @@ ventanas visibles (`typeWindowsChanged`, ya agregado) — por las dudas, además
 reaccionar a eventos, el servicio reescanea todas las ventanas cada 1.5 segundos como
 respaldo.
 
+## Lectura de montos y distancias (parser genérico)
+
+El lector de texto ahora soporta dos formatos de monto distintos, según la app:
+- Símbolo antes del número: `"$4.200"` (DiDi).
+- Símbolo después del número: `"3.256 ARS"` (Uber) — con cuidado de no confundirlo con
+  una referencia de tarifa por zona tipo `"693 ARS/km"`, que no es el monto del viaje.
+
+También se corrigió un bug real: `"$4.200"` se estaba interpretando como `4.2` en vez
+de `4200`, porque el punto se leía siempre como separador decimal. Ahora, si el punto
+va seguido de exactamente 3 dígitos, se interpreta como separador de miles (formato
+argentino); si va seguido de 1 o 2 dígitos, se interpreta como decimal.
+
+Para distancia y tiempo, se busca el patrón `"X min (Y km)"` tal cual aparece en
+pantalla. Cuando una app muestra DOS de estos (distancia hasta el pasajero + distancia
+del viaje, como `"A 3 min (0,9 km) de distancia"` seguido de `"Viaje de 10 min (3,8
+km)"`), se toma el primero como distancia de recogida y el último como el viaje en sí.
+
+Si una app sigue sin detectar una oferta real que sí está en pantalla, revisá
+`adb logcat -s RideParser` (necesita conectar el tablet a una PC) — cada vez que no se
+detecta nada, el servicio registra ahí el texto exacto que alcanzó a leer, para poder
+ajustar el patrón de búsqueda a esa app puntual.
+
 ## Elegir qué apps abrir
 
 Ya no hay una lista fija de 4 apps en el código. Desde el botón "3. Elegir apps a
