@@ -79,7 +79,8 @@ object AppConfigHolder {
                 showNetPerKm = p.getBoolean("show_net_km", true),
                 showNetPerHour = p.getBoolean("show_net_hour", false),
                 showScore = p.getBoolean("show_score", true),
-                badgeDurationSeconds = p.getInt("badge_duration_seconds", 10)
+                badgeDurationSeconds = p.getInt("badge_duration_seconds", 10),
+                showDebugText = p.getBoolean("show_debug_text", false)
             )
         }
         set(value) {
@@ -90,6 +91,7 @@ object AppConfigHolder {
                 .putBoolean("show_net_hour", value.showNetPerHour)
                 .putBoolean("show_score", value.showScore)
                 .putInt("badge_duration_seconds", value.badgeDurationSeconds)
+                .putBoolean("show_debug_text", value.showDebugText)
                 .apply()
         }
 }

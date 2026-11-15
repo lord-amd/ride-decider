@@ -36,6 +36,27 @@ ventanas visibles (`typeWindowsChanged`, ya agregado) — por las dudas, además
 reaccionar a eventos, el servicio reescanea todas las ventanas cada 1.5 segundos como
 respaldo.
 
+## Modo diagnóstico (ver qué texto detecta cada app, sin PC)
+
+En Settings hay un checkbox "Mostrar el texto detectado cuando una app no tiene
+ninguna oferta". Con esto activado, el cartel gris de "Esperando datos..." agrega
+además una muestra del texto que el Accessibility Service sí logró leer en esa
+ventana en ese momento. Sirve para distinguir dos casos sin necesitar conectar el
+tablet a una PC:
+- Si en ese texto aparece el monto/km de una oferta real → el problema es que el
+  patrón de búsqueda no la reconoce, hay que ajustarlo (mandame una captura de
+  pantalla con el modo diagnóstico activado en el momento de la oferta).
+- Si el texto sale vacío o sin esos datos → la app todavía no tiene ninguna oferta
+  en pantalla, o esa app no expone el texto por accesibilidad (haría falta el OCR,
+  que todavía no está conectado del todo).
+
+También corregí que el cartel con una oferta real NO llegaba a ocultarse solo a los
+10 segundos cuando la oferta seguía en pantalla: varias apps muestran un contador en
+vivo ("X segundos para responder"), y el sistema comparaba el texto completo del
+cartel, así que ese segundero cambiando todo el tiempo hacía pensar que "llegó algo
+nuevo" en cada repaso. Ahora se compara solo el monto/distancia/tiempo de la oferta en
+sí, que no cambian mientras sea la misma oferta.
+
 ## Lectura de montos y distancias (parser genérico)
 
 El lector de texto ahora soporta dos formatos de monto distintos, según la app:

@@ -134,6 +134,11 @@ class RideAccessibilityService : AccessibilityService() {
                             // "esperando" en esta región — así confirmás que esta app
                             // sí está siendo leída, en vez de no ver nada y no saber si
                             // es porque no hay oferta o porque algo no está andando.
+                            // Guardamos también una muestra del texto visto (rawText)
+                            // para poder mostrarla en el cartel como diagnóstico: así se
+                            // puede ver, sin conectar el tablet a una PC, si la app
+                            // simplemente no tiene ninguna oferta en pantalla ahora, o si
+                            // SÍ hay texto pero el patrón de búsqueda no lo reconoce.
                             RideOfferStore.update(
                                 RideOffer(
                                     appPackage = pkg,
@@ -142,7 +147,7 @@ class RideAccessibilityService : AccessibilityService() {
                                     distanceKm = null,
                                     etaMinutes = null,
                                     windowBounds = bounds,
-                                    rawText = "",
+                                    rawText = debugTexts,
                                     sourceConfidence = Confidence.LOW
                                 )
                             )

@@ -57,5 +57,11 @@ data class DisplayConfig(
     val showNetPerKm: Boolean = true,
     val showNetPerHour: Boolean = false,
     val showScore: Boolean = true,
-    val badgeDurationSeconds: Int = 10 // 0 = no ocultar nunca
+    val badgeDurationSeconds: Int = 10, // 0 = no ocultar nunca
+    // Modo diagnóstico: cuando una app no tiene ninguna oferta detectada, muestra
+    // además una muestra del texto que el Accessibility Service sí logró leer en esa
+    // ventana. Sirve para ver, sin conectar el tablet a una PC, si el problema es que
+    // la app no muestra ninguna oferta todavía o que el patrón de búsqueda no la
+    // reconoce (en ese caso se ve texto con el monto/distancia pero igual sale gris).
+    val showDebugText: Boolean = false
 )

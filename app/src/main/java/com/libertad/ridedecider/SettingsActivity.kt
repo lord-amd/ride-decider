@@ -97,6 +97,18 @@ class SettingsActivity : AppCompatActivity() {
             savedDisplay.badgeDurationSeconds.toString()
         )
 
+        root.addView(TextView(this).apply {
+            text = "\nModo diagnóstico"
+            textSize = 13f
+        })
+        val showDebugCheck = CheckBox(this).apply {
+            text = "Mostrar el texto detectado cuando una app no tiene ninguna oferta\n" +
+                "(útil para ver si el problema es que no hay oferta en pantalla, o que\n" +
+                "sí hay oferta pero no se reconoce el patrón de búsqueda)"
+            isChecked = savedDisplay.showDebugText
+        }
+        root.addView(showDebugCheck)
+
         root.addView(Button(this).apply {
             text = "Guardar"
             setOnClickListener {
@@ -139,7 +151,8 @@ class SettingsActivity : AppCompatActivity() {
                     showNetPerKm = showNetKmCheck.isChecked,
                     showNetPerHour = showNetHourCheck.isChecked,
                     showScore = showScoreCheck.isChecked,
-                    badgeDurationSeconds = badgeDuration.text.toString().toIntOrNull() ?: 10
+                    badgeDurationSeconds = badgeDuration.text.toString().toIntOrNull() ?: 10,
+                    showDebugText = showDebugCheck.isChecked
                 )
 
                 finish()

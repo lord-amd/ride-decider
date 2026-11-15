@@ -42,11 +42,13 @@ class OverlayService : Service() {
     // reprogramar cada vez que llega un dato nuevo de esa app (ver DisplayConfig).
     private val hideTimers = mutableMapOf<String, Runnable>()
 
-    // Último texto mostrado por packageName, para notar si realmente cambió algo.
-    // Sin esto, el reescaneo periódico (cada 1.5s) reiniciaba el timer de
-    // auto-ocultado en cada pasada aunque no hubiera ningún dato nuevo, y el cartel
-    // nunca llegaba a desaparecer.
-    private val lastTexts = mutableMapOf<String, String>()
+    // Última "firma" numérica mostrada por packageName (monto/distancia/tiempo), para
+    // notar si la oferta realmente cambió. OJO: comparamos los NÚMEROS de la oferta, no
+    // el texto completo del cartel — muchas apps muestran un contador en vivo ("15s
+    // para responder") en la misma pantalla, y si comparáramos el texto entero, ese
+    // segundero cambiando constantemente hacía pensar que "llegó una oferta nueva" en
+    // cada repaso y el cartel nunca llegaba a ocultarse solo.
+    private val lastSignatures = mutableMapOf<String, String>()
 
     private fun currentEngine() = DecisionEngine(
         weights = AppConfigHolder.weights,
@@ -111,16 +113,19 @@ class OverlayService : Service() {
             positionBadge(badge, offer)
 
             val newText = buildBadgeText(offer, evaluation, display, isBest = offer.appPackage == bestPackage)
+            // Texto siempre actualizado (por si el score/semáforo cambió), aunque no
+            // sea un cambio tan grande como para reiniciar el cartel.
             badge.text = newText
             badge.setBackgroundColor(colorForLight(evaluation.light))
 
+            val signature = "${offer.fareGross}|${offer.distanceKm}|${offer.etaMinutes}|${offer.pickupDistanceKm}"
+
             // Solo reiniciamos el cartel (mostrarlo + reprogramar el auto-ocultado) si
-            // el contenido realmente cambió. Si es el mismo texto que la pasada
-            // anterior (reescaneo de rutina sin novedades), no tocamos nada: si ya
-            // estaba oculto, sigue oculto; si está visible, el timer sigue corriendo
-            // sin reiniciarse.
-            if (lastTexts[offer.appPackage] != newText) {
-                lastTexts[offer.appPackage] = newText
+            // la oferta en sí cambió de verdad. Si son los mismos números que la pasada
+            // anterior, no tocamos nada: si ya estaba oculto, sigue oculto; si está
+            // visible, el timer sigue corriendo sin reiniciarse.
+            if (lastSignatures[offer.appPackage] != signature) {
+                lastSignatures[offer.appPackage] = signature
                 badge.visibility = android.view.View.VISIBLE
                 if (offer.fareGross != null) {
                     // Hay una oferta real detectada: este es el dato que importa leer
@@ -140,7 +145,7 @@ class OverlayService : Service() {
         val stale = badges.keys - seenPackages
         for (pkg in stale) {
             hideTimers.remove(pkg)?.let { uiHandler.removeCallbacks(it) }
-            lastTexts.remove(pkg)
+            lastSignatures.remove(pkg)
             badges.remove(pkg)?.let { runCatching { windowManager.removeView(it) } }
         }
     }
@@ -150,6 +155,15 @@ class OverlayService : Service() {
         if (offer.fareGross == null) {
             // Todavía no se detectó ninguna oferta en esta app — cartel neutro de
             // confirmación de que esta región SÍ está siendo leída.
+            if (display.showDebugText && offer.rawText.isNotBlank()) {
+                // Modo diagnóstico: mostramos una muestra del texto que el Accessibility
+                // Service sí logró leer en esta ventana. Si acá aparece el monto/km de
+                // una oferta real, el problema es que el patrón de búsqueda no lo
+                // reconoce; si sale vacío o sin esos datos, es que la app todavía no
+                // tiene ninguna oferta en pantalla (o no expone el texto por
+                // accesibilidad, y haría falta el OCR).
+                return "${offer.appLabel}\nEsperando datos…\n" + offer.rawText.take(90)
+            }
             return "${offer.appLabel}\nEsperando datos…"
         }
 
