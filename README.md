@@ -6,6 +6,26 @@ sin depender de parsers específicos por app, calcula ganancia neta real (despu�
 comisión y costo propio por km), y muestra un semáforo flotante (verde/amarillo/rojo)
 sobre cada porción de pantalla para decidir rápido.
 
+## Elegir qué apps abrir
+
+Ya no hay una lista fija de 4 apps en el código. Desde el botón "3. Elegir apps a
+abrir" (`AppPickerActivity`) elegís hasta 4 apps de **todas** las instaladas en el
+dispositivo — el orden en que las tildás es el orden en que se van a acomodar en
+pantalla. Al lanzarlas (botón "5."), `MainActivity.computeBounds()` calcula los
+rectángulos para que llenen TODA la pantalla sin importar si elegiste 1, 2, 3 o 4
+(no es un 2x2 fijo: con 3 apps, por ejemplo, una ocupa una franja completa y las
+otras dos se reparten el resto).
+
+**Cerrar las apps / cerrar Ride Decider:** el botón "Cerrar las apps elegidas" usa
+`killBackgroundProcesses()`, que es lo único que Android deja hacer a una app normal
+sin privilegios especiales — funciona bien si esa app ya pasó a segundo plano, pero
+**no puede forzar el cierre de una app que esté activa en primer plano** (restricción
+de seguridad del sistema, no hay forma de evitarla desde una app común). Si no se
+cierra sola, Android te pide que la deslices vos desde "Recientes". El botón "Cerrar
+Ride Decider" cierra el panel flotante y la pantalla principal; el Accessibility
+Service sigue corriendo en segundo plano a propósito (para apagarlo del todo hay que
+desactivarlo en Ajustes de Accesibilidad, igual que siempre).
+
 ## Arquitectura (actualizada): lectura universal, no por app
 
 Ya no hay un parser por plataforma (`UberParser`, `CabifyParser`, etc.). Hay un único

@@ -1,5 +1,6 @@
 package com.libertad.ridedecider
 
+import android.app.ActivityManager
 import android.app.ActivityOptions
 import android.app.AlertDialog
 import android.content.Intent
@@ -8,15 +9,17 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import androidx.appcompat.app.AppCompatActivity
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 
 /**
- * Pantalla principal: pide los permisos necesarios (overlay + accesibilidad) y, si el
- * dispositivo soporta freeform (tablet / modo escritorio), intenta lanzar las 4 apps
- * de conductor en ventanas separadas usando ActivityOptions.setLaunchBounds.
+ * Pantalla principal: pide los permisos necesarios (overlay + accesibilidad), deja
+ * elegir qué apps abrir (AppPickerActivity, hasta 4) y, si el dispositivo soporta
+ * freeform (tablet / modo escritorio), las lanza en ventanas separadas que se
+ * acomodan solas para llenar toda la pantalla según cuántas hayas elegido.
  *
  * IMPORTANTE (ver nota de arquitectura): en celulares comunes sin freeform habilitado,
  * Android ignora setLaunchBounds y abre cada app en pantalla completa normal — en ese
@@ -24,13 +27,6 @@ import android.widget.TextView
  * del semáforo sigue funcionando igual porque lee lo que esté en foco en cada momento.
  */
 class MainActivity : AppCompatActivity() {
-
-    private val targets = listOf(
-        "com.ubercab.driver" to "Uber",
-        "com.cabify.driver" to "Cabify",
-        "com.didiglobal.driver" to "DiDi",
-        "sinet.startup.inDriver" to "inDrive"
-    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,7 +40,7 @@ class MainActivity : AppCompatActivity() {
             text = "Ride Decider\n\n" +
                 "1) Dale permiso de 'Mostrar sobre otras apps'\n" +
                 "2) Activá el Accessibility Service 'Ride Decider'\n" +
-                "3) Lanzá las apps (freeform si tu dispositivo lo soporta)\n"
+                "3) Elegí qué apps abrir y lanzalas (freeform si tu dispositivo lo soporta)\n"
             textSize = 14f
         })
 
@@ -59,13 +55,23 @@ class MainActivity : AppCompatActivity() {
         })
 
         root.addView(Button(this).apply {
-            text = "3. Iniciar overlay (semáforo)"
+            text = "3. Elegir apps a abrir"
+            setOnClickListener { startActivity(Intent(this@MainActivity, AppPickerActivity::class.java)) }
+        })
+
+        root.addView(Button(this).apply {
+            text = "4. Iniciar overlay (semáforo)"
             setOnClickListener { startService(Intent(this@MainActivity, OverlayService::class.java)) }
         })
 
         root.addView(Button(this).apply {
-            text = "4. Lanzar las 4 apps (freeform si disponible)"
-            setOnClickListener { launchAllInFreeform() }
+            text = "5. Abrir las apps elegidas (freeform si disponible)"
+            setOnClickListener { launchSelectedInFreeform() }
+        })
+
+        root.addView(Button(this).apply {
+            text = "Cerrar las apps elegidas"
+            setOnClickListener { closeSelectedApps() }
         })
 
         root.addView(Button(this).apply {
@@ -76,6 +82,11 @@ class MainActivity : AppCompatActivity() {
         root.addView(Button(this).apply {
             text = "Buscar actualización"
             setOnClickListener { checkForUpdate(showNoUpdateMessage = true) }
+        })
+
+        root.addView(Button(this).apply {
+            text = "Cerrar Ride Decider"
+            setOnClickListener { closeThisApp() }
         })
 
         setContentView(root)
@@ -119,43 +130,125 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Intenta lanzar cada app en un cuadrante de la pantalla usando freeform launch
-     * bounds. Esto SOLO tiene efecto real si:
-     *  - el dispositivo soporta android.software.freeform_window_management
-     *    (tablets grandes, Android 12L+, o Samsung DeX en modo escritorio), y
-     *  - la app destino está instalada (si no, se la omite silenciosamente — podés
-     *    cambiar esto por un Toast si preferís feedback visible).
-     * En un celular común sin esas condiciones, el sistema simplemente abre cada app
-     * en pantalla completa (comportamiento normal), así que no rompe nada probarlo.
+     * Lanza las apps que elegiste en AppPickerActivity, cada una en una región que se
+     * calcula sola para que entre 1 y 4 apps llenen SIEMPRE toda la pantalla (no es un
+     * 2x2 fijo): 1 app = pantalla completa, 2 = mitades, 3 = una grande + dos chicas,
+     * 4 = grilla 2x2. Esto SOLO tiene efecto visual real si el dispositivo soporta
+     * freeform (tablets grandes, Android 12L+, o Samsung DeX en modo escritorio); en
+     * un celular común, Android abre cada app en pantalla completa igual.
      */
-    private fun launchAllInFreeform() {
+    private fun launchSelectedInFreeform() {
+        val selected = AppSelectionStore.getSelected(this)
+        if (selected.isEmpty()) {
+            Toast.makeText(this, "Primero elegí las apps (paso 3)", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val screenW = resources.displayMetrics.widthPixels
         val screenH = resources.displayMetrics.heightPixels
-        val halfW = screenW / 2
-        val halfH = screenH / 2
+        val bounds = computeBounds(selected.size, screenW, screenH)
 
-        val quadrants = listOf(
-            Rect(0, 0, halfW, halfH),
-            Rect(halfW, 0, screenW, halfH),
-            Rect(0, halfH, halfW, screenH),
-            Rect(halfW, halfH, screenW, screenH)
-        )
-
-        targets.forEachIndexed { index, (pkg, _) ->
+        var abrioAlguna = false
+        selected.forEachIndexed { index, pkg ->
             val launchIntent = packageManager.getLaunchIntentForPackage(pkg) ?: return@forEachIndexed
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
 
             val options = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                ActivityOptions.makeBasic().apply {
-                    launchBounds = quadrants[index]
-                }
+                ActivityOptions.makeBasic().apply { launchBounds = bounds[index] }
             } else null
 
             try {
                 startActivity(launchIntent, options?.toBundle())
+                abrioAlguna = true
             } catch (_: Exception) {
-                // app no instalada o no permite estas flags; se omite.
+                // app desinstalada desde que la elegiste, o no permite estas flags; se omite.
             }
         }
+        if (!abrioAlguna) {
+            Toast.makeText(this, "No se pudo abrir ninguna de las apps elegidas", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * Calcula los rectángulos para que `count` apps (1 a 4) llenen toda la pantalla,
+     * sin importar cuántas sean. Para 3, la primera ocupa una franja completa y las
+     * otras dos se reparten el resto, eligiendo filas o columnas según la orientación.
+     */
+    private fun computeBounds(count: Int, w: Int, h: Int): List<Rect> {
+        val landscape = w > h
+        return when (count.coerceAtMost(4)) {
+            1 -> listOf(Rect(0, 0, w, h))
+
+            2 -> if (landscape) {
+                val halfW = w / 2
+                listOf(Rect(0, 0, halfW, h), Rect(halfW, 0, w, h))
+            } else {
+                val halfH = h / 2
+                listOf(Rect(0, 0, w, halfH), Rect(0, halfH, w, h))
+            }
+
+            3 -> if (landscape) {
+                val halfW = w / 2
+                val halfH = h / 2
+                listOf(
+                    Rect(0, 0, halfW, h),
+                    Rect(halfW, 0, w, halfH),
+                    Rect(halfW, halfH, w, h)
+                )
+            } else {
+                val halfW = w / 2
+                val halfH = h / 2
+                listOf(
+                    Rect(0, 0, w, halfH),
+                    Rect(0, halfH, halfW, h),
+                    Rect(halfW, halfH, w, h)
+                )
+            }
+
+            else -> { // 4
+                val halfW = w / 2
+                val halfH = h / 2
+                listOf(
+                    Rect(0, 0, halfW, halfH),
+                    Rect(halfW, 0, w, halfH),
+                    Rect(0, halfH, halfW, h),
+                    Rect(halfW, halfH, w, h)
+                )
+            }
+        }
+    }
+
+    /**
+     * "Cerrar" las apps elegidas. OJO con la limitación real de Android acá: una app
+     * normal NO tiene forma de forzar el cierre de otra app que esté en primer plano
+     * (es una restricción de seguridad del sistema, no algo que se pueda evitar sin
+     * ser el dueño del dispositivo). killBackgroundProcesses() es lo único disponible
+     * sin privilegios especiales, y solo tiene efecto si esa app ya pasó a segundo
+     * plano — si la estás viendo activa en la pantalla dividida, puede no hacer nada.
+     * En ese caso, Android te va a pedir que la cierres vos deslizándola en "Recientes".
+     */
+    private fun closeSelectedApps() {
+        val selected = AppSelectionStore.getSelected(this)
+        if (selected.isEmpty()) {
+            Toast.makeText(this, "No elegiste ninguna app todavía", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val am = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+        selected.forEach { pkg -> am.killBackgroundProcesses(pkg) }
+
+        Toast.makeText(
+            this,
+            "Se pidió cerrar las apps elegidas. Si alguna seguía activa en pantalla, " +
+                "Android no deja forzarla desde otra app — cerrala deslizándola en Recientes.",
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
+    /** Cierra el panel flotante y esta pantalla. El Accessibility Service sigue activo
+     *  en segundo plano (es lo esperado: para apagarlo del todo hay que desactivarlo
+     *  en Ajustes de Accesibilidad, igual que hoy). */
+    private fun closeThisApp() {
+        stopService(Intent(this, OverlayService::class.java))
+        finishAndRemoveTask()
     }
 }

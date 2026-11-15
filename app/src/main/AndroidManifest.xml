@@ -24,6 +24,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Best-effort para "cerrar" las apps elegidas (ver limitación en MainActivity:
+         Android no deja que una app normal fuerce el cierre de otra app en primer plano) -->
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+
     <application
         android:label="Ride Decider"
         android:icon="@mipmap/ic_launcher"
@@ -43,6 +47,10 @@
 
         <activity
             android:name=".SettingsActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".AppPickerActivity"
             android:exported="false" />
 
         <!-- Accessibility Service: lee el contenido de pantalla de la app en foco -->
