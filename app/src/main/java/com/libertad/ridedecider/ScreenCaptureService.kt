@@ -2,6 +2,7 @@ package com.libertad.ridedecider
 
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
@@ -14,7 +15,6 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
-import android.util.DisplayMetrics
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.libertad.ridedecider.ocr.ScreenCaptureHolder
@@ -56,21 +56,50 @@ class ScreenCaptureService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        startForeground(NOTIF_ID, buildNotification())
+        // Importante: esto tiene que pasar SIEMPRE y rápido, sin importar si después
+        // falla el armado de la captura — si Android no ve un startForeground() dentro
+        // de los primeros segundos de haber pedido iniciar este servicio, mata la app
+        // entera (y con ella el overlay de los semáforos, que corre en el mismo
+        // proceso). Por eso todo lo demás que puede fallar va en onStartCommand, dentro
+        // de su propio try/catch, y nunca acá.
+        try {
+            startForegroundCompat()
+        } catch (e: Exception) {
+            Log.e(TAG, "No se pudo poner este servicio en primer plano", e)
+            stopSelf()
+        }
+    }
+
+    private fun startForegroundCompat() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+        } else {
+            startForeground(NOTIF_ID, buildNotification())
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
         val resultData = intent?.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
 
+        // De paso, nos asegura que el overlay de los semáforos siga vivo: si por lo
+        // que sea el proceso se reinició y OverlayService no volvió solo, esto lo
+        // vuelve a levantar sin que haga falta tocar el botón 4 de nuevo.
+        try {
+            startService(Intent(this, OverlayService::class.java))
+        } catch (e: Exception) {
+            Log.e(TAG, "No se pudo relanzar OverlayService", e)
+        }
+
         if (resultData == null || mediaProjection != null) {
             // Ya está andando, o nos llamaron sin los datos del permiso -> no hacemos nada.
+            if (resultData == null && mediaProjection == null) stopSelf()
             return START_STICKY
         }
 
         try {
             setUpProjection(resultCode, resultData)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e(TAG, "No se pudo iniciar la captura de pantalla para OCR", e)
             stopSelf()
         }
@@ -83,9 +112,11 @@ class ScreenCaptureService : Service() {
         mediaProjection = projection
         projection.registerCallback(projectionCallback, Handler(Looper.getMainLooper()))
 
-        val metrics = DisplayMetrics()
-        @Suppress("DEPRECATION")
-        windowManager().defaultDisplay.getRealMetrics(metrics)
+        // OJO: NO usar windowManager().defaultDisplay acá — en Android 11+ tirar de un
+        // Display desde un Service (un contexto sin ventana propia) lanza
+        // UnsupportedOperationException y tira abajo el proceso entero (overlay
+        // incluido). resources.displayMetrics da el mismo ancho/alto sin ese riesgo.
+        val metrics = resources.displayMetrics
         val width = metrics.widthPixels
         val height = metrics.heightPixels
         val density = metrics.densityDpi
@@ -141,8 +172,6 @@ class ScreenCaptureService : Service() {
             cropped
         }
     }
-
-    private fun windowManager() = getSystemService(WINDOW_SERVICE) as android.view.WindowManager
 
     override fun onDestroy() {
         super.onDestroy()
