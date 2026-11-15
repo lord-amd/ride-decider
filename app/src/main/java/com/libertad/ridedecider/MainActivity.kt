@@ -116,16 +116,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestOverlayPermission() {
-        if (!Settings.canDrawOverlays(this)) {
-            val intent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-            startActivity(intent)
+        if (Settings.canDrawOverlays(this)) {
+            // Antes acá no pasaba nada visible si ya estaba concedido -> parecía que
+            // el botón no hacía nada. Ahora al menos confirma el estado.
+            Toast.makeText(this, "Ya tenés el permiso de superposición concedido", Toast.LENGTH_SHORT).show()
+            return
         }
+        val intent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:$packageName")
+        )
+        startActivity(intent)
     }
 
     private fun openAccessibilitySettings() {
+        Toast.makeText(
+            this,
+            "Buscá \"Ride Decider\" bajo Accesibilidad → Instaladas, y activá el switch",
+            Toast.LENGTH_LONG
+        ).show()
         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
     }
 
