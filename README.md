@@ -20,8 +20,15 @@ se considera un viaje, solo qué número se ve escrito. El score ahora se muestr
 "Conviene: N/100" en vez de solo un número suelto.
 
 También en Settings: cuántos segundos queda el cartel en pantalla antes de ocultarse
-solo (por defecto 10; poné 0 para que nunca se oculte). Se reinicia la cuenta cada vez
-que llega un dato nuevo de esa app.
+solo (por defecto 10; poné 0 para que nunca se oculte). **El auto-ocultado solo aplica
+al cartel con una oferta de viaje real detectada** (monto/km/score) — es el dato que
+importa leer rápido y decidir. El cartel gris "Esperando datos…" (todavía no hay
+ninguna oferta en esa app) NO se autooculta nunca: queda fijo como confirmación de que
+esa app sigue siendo monitoreada, hasta que aparezca una oferta real (ahí se muestra
+esa info 10 segundos) o la app deje de estar en pantalla.
+
+Solo se ven carteles de las apps que elegiste en "Elegir apps a abrir" — no de
+cualquier ventana visible en pantalla.
 
 Si solo ves el cartel de una de las apps abiertas en pantalla dividida, puede ser que
 el sistema no esté avisándole al Accessibility Service cuándo cambia el conjunto de

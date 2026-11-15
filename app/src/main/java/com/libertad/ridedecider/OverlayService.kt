@@ -122,7 +122,17 @@ class OverlayService : Service() {
             if (lastTexts[offer.appPackage] != newText) {
                 lastTexts[offer.appPackage] = newText
                 badge.visibility = android.view.View.VISIBLE
-                scheduleAutoHide(offer.appPackage, badge, display.badgeDurationSeconds)
+                if (offer.fareGross != null) {
+                    // Hay una oferta real detectada: este es el dato que importa leer
+                    // rápido, así que se oculta solo después del tiempo configurado.
+                    scheduleAutoHide(offer.appPackage, badge, display.badgeDurationSeconds)
+                } else {
+                    // Todavía no hay ninguna oferta en esta app ("Esperando datos…").
+                    // Este cartel NO se autooculta: se queda como confirmación
+                    // permanente de que la app sigue siendo monitoreada, hasta que
+                    // aparezca una oferta real o la app deje de estar en pantalla.
+                    hideTimers.remove(offer.appPackage)?.let { uiHandler.removeCallbacks(it) }
+                }
             }
         }
 
