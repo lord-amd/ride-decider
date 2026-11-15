@@ -77,6 +77,14 @@
                 android:value="ride_decision_overlay" />
         </service>
 
+        <!-- Servicio en primer plano que mantiene la captura de pantalla (MediaProjection)
+             para el fallback de OCR, usado cuando una app (ej. DiDi) no expone texto por
+             Accessibility para su pantalla de oferta de viaje. -->
+        <service
+            android:name=".ScreenCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
         <!-- Necesario para pasarle al instalador de Android el APK descargado
              (Android N+ no acepta file:// directo entre apps, requiere content://) -->
         <provider

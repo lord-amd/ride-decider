@@ -5,6 +5,7 @@ import android.app.ActivityOptions
 import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Rect
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -13,6 +14,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 
 /**
@@ -28,6 +30,25 @@ import androidx.appcompat.app.AppCompatActivity
  */
 class MainActivity : AppCompatActivity() {
 
+    // Resultado del diálogo de "compartir/grabar pantalla" que pide Android para poder
+    // usar MediaProjection (necesario para el OCR). Android no deja pedir este permiso
+    // de forma "silenciosa": siempre muestra ese diálogo del sistema, y hay que volver
+    // a pedirlo si se reinicia el celular o se cierra Ride Decider del todo.
+    private val screenCaptureLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            val intent = Intent(this, ScreenCaptureService::class.java).apply {
+                putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, result.resultCode)
+                putExtra(ScreenCaptureService.EXTRA_RESULT_DATA, result.data)
+            }
+            startForegroundService(intent)
+            Toast.makeText(this, "Lectura de pantalla (OCR) activada", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "No se otorgó el permiso de captura de pantalla", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -40,7 +61,10 @@ class MainActivity : AppCompatActivity() {
             text = "Ride Decider\n\n" +
                 "1) Dale permiso de 'Mostrar sobre otras apps'\n" +
                 "2) Activá el Accessibility Service 'Ride Decider'\n" +
-                "3) Elegí qué apps abrir y lanzalas (freeform si tu dispositivo lo soporta)\n"
+                "3) Elegí qué apps abrir y lanzalas (freeform si tu dispositivo lo soporta)\n" +
+                "6) Si alguna app no muestra el semáforo (como DiDi), activá la lectura " +
+                "de pantalla (OCR) — hace falta volver a activarla si reiniciás el " +
+                "celular o cerrás del todo Ride Decider\n"
             textSize = 14f
         })
 
@@ -67,6 +91,11 @@ class MainActivity : AppCompatActivity() {
         root.addView(Button(this).apply {
             text = "5. Abrir las apps elegidas (freeform si disponible)"
             setOnClickListener { launchSelectedInFreeform() }
+        })
+
+        root.addView(Button(this).apply {
+            text = "6. Activar lectura de pantalla (OCR)"
+            setOnClickListener { requestScreenCapture() }
         })
 
         root.addView(Button(this).apply {
@@ -127,6 +156,16 @@ class MainActivity : AppCompatActivity() {
             Uri.parse("package:$packageName")
         )
         startActivity(intent)
+    }
+
+    /**
+     * Pide el permiso de captura de pantalla (diálogo nativo de Android, no se puede
+     * evitar) y, si se otorga, arranca ScreenCaptureService para que ScreenOcrHelper
+     * tenga de dónde recortar cuando una app no expone texto por Accessibility.
+     */
+    private fun requestScreenCapture() {
+        val manager = getSystemService(MediaProjectionManager::class.java)
+        screenCaptureLauncher.launch(manager.createScreenCaptureIntent())
     }
 
     private fun openAccessibilitySettings() {
@@ -258,6 +297,7 @@ class MainActivity : AppCompatActivity() {
      *  en Ajustes de Accesibilidad, igual que hoy). */
     private fun closeThisApp() {
         stopService(Intent(this, OverlayService::class.java))
+        stopService(Intent(this, ScreenCaptureService::class.java))
         finishAndRemoveTask()
     }
 }

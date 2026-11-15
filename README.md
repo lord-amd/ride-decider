@@ -36,6 +36,23 @@ ventanas visibles (`typeWindowsChanged`, ya agregado) — por las dudas, además
 reaccionar a eventos, el servicio reescanea todas las ventanas cada 1.5 segundos como
 respaldo.
 
+## OCR de pantalla (para apps como DiDi que no exponen texto por accesibilidad)
+
+Confirmado en uso real: la pantalla de oferta de DiDi no expone NINGÚN texto por
+Accessibility (el árbol queda completamente vacío ahí, aunque el resto de la app sí
+tiene texto legible). Para esos casos ahora hay un fallback de OCR real:
+
+1. En Ride Decider, tocá "6. Activar lectura de pantalla (OCR)".
+2. Android va a mostrar su propio cartel de "compartir/grabar pantalla" — hay que
+   aceptarlo. Esto es un permiso del sistema operativo, no se puede evitar ni
+   preconfigurar.
+3. A partir de ahí, cualquier ventana donde Accessibility no encuentre nada se
+   recorta del frame de pantalla capturado y se le corre OCR local (ML Kit, en el
+   propio dispositivo, sin mandar nada a internet).
+
+Hay que repetir el paso 1 si reiniciás el celular o cerrás Ride Decider del todo
+("Cerrar Ride Decider"): Android no deja guardar este permiso de forma permanente.
+
 ## Bug real: la oferta se detectaba pero se perdía al toque
 
 Algunas apps muestran el cuadro de la oferta como una ventana SEPARADA, superpuesta
