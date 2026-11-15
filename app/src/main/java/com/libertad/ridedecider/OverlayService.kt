@@ -172,18 +172,38 @@ class OverlayService : Service() {
 
         val datos = mutableListOf<String>()
         if (display.showFare) datos += "$${"%.0f".format(offer.fareGross)}"
-        if (display.showDistance && offer.distanceKm != null) datos += "${"%.1f".format(offer.distanceKm)} km"
+        if (display.showDistance) {
+            datos += if (offer.distanceKm != null) "${"%.1f".format(offer.distanceKm)} km" else "km: ?"
+        }
         if (datos.isNotEmpty()) lines += datos.joinToString(" · ")
 
+        // Si se detectó el importe pero NO la distancia (parser incompleto para esa
+        // pantalla), no tiene sentido calcular neto/km ni el score -> mostrar "?" en vez
+        // de un engañoso "0/km neto" o "-/100" que parece un bug cuando en realidad es
+        // un dato que todavía falta.
         val netos = mutableListOf<String>()
-        if (display.showNetPerKm) netos += "${"%.0f".format(evaluation.netPerKm ?: 0.0)}/km neto"
-        if (display.showNetPerHour) netos += "${"%.0f".format(evaluation.netPerHour ?: 0.0)}/hora neto"
+        if (display.showNetPerKm) {
+            netos += if (evaluation.netPerKm != null) "${"%.0f".format(evaluation.netPerKm)}/km neto" else "?/km neto"
+        }
+        if (display.showNetPerHour) {
+            netos += if (evaluation.netPerHour != null) "${"%.0f".format(evaluation.netPerHour)}/hora neto" else "?/hora neto"
+        }
         if (netos.isNotEmpty()) lines += netos.joinToString(" · ")
 
         if (display.showScore) {
             // "Score" explicado en criollo en vez de solo el número: 0 a 100, cuanto
             // más alto más conviene este viaje según tus pesos configurados.
-            lines += "Conviene: ${evaluation.score?.toInt() ?: "-"}/100"
+            lines += if (evaluation.score != null) {
+                "Conviene: ${evaluation.score.toInt()}/100"
+            } else {
+                "Conviene: falta distancia"
+            }
+        }
+
+        if (display.showDebugText && offer.distanceKm == null && offer.rawText.isNotBlank()) {
+            // Se detectó importe pero no distancia/tiempo: mostramos el texto visto para
+            // poder ajustar el patrón de búsqueda (p. ej. Uber en formato "X min (Y km)").
+            lines += offer.rawText.take(90)
         }
 
         return lines.joinToString("\n")

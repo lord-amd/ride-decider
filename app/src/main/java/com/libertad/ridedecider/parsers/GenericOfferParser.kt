@@ -41,13 +41,12 @@ object GenericOfferParser {
     private val kmPattern = Regex("""(\d+(?:[.,]\d+)?)\s*km\b""", RegexOption.IGNORE_CASE)
     private val minPattern = Regex("""(\d+(?:[.,]\d+)?)\s*min\b""", RegexOption.IGNORE_CASE)
 
-    // Palabras clave que, si aparecen como texto propio (label), ayudan a confirmar que
-    // estamos en una pantalla de solicitud de viaje y no en otra pantalla cualquiera de
-    // la app (menú, configuración, etc). No son obligatorias, solo suman confianza.
-    private val contextKeywords = listOf(
-        "distancia", "distance", "tiempo", "time", "duración", "duration",
-        "tarifa", "fare", "ganancia", "earnings", "viaje", "trip", "ride",
-        "aceptar", "accept", "rechazar", "decline"
+    // Palabras FUERTES: solo aparecen en la tarjeta de aceptar/rechazar un viaje
+    // concreto, nunca en la pantalla principal/"online" de la app (que también tiene
+    // plata y tiempos — la ganancia del día, las franjas de demanda del mapa — y por
+    // eso NO sirven como señal de "esto es una oferta").
+    private val strongContextKeywords = listOf(
+        "aceptar", "accept", "rechazar", "decline", "ignorar", "ignore"
     )
 
     data class ParsedOffer(
@@ -108,12 +107,18 @@ object GenericOfferParser {
             }
         }
 
-        val hasKeyword = contextKeywords.any { kw -> texts.any { it.contains(kw, ignoreCase = true) } }
+        val hasStrongKeyword = strongContextKeywords.any { kw -> texts.any { it.contains(kw, ignoreCase = true) } }
 
-        // Umbral mínimo para considerar "esto es una oferta real" y no ruido de otra
-        // pantalla: necesitamos al menos el monto, y al menos uno de (distancia, tiempo),
-        // O el monto más una palabra clave de contexto.
-        val looksLikeOffer = fare != null && (tripKm != null || tripMin != null || hasKeyword)
+        // Umbral mínimo para considerar "esto es una oferta real" y no ruido de la
+        // pantalla principal de la app (que también muestra plata -la ganancia del día-
+        // y tiempos -franjas de demanda del mapa- sin que haya ninguna oferta). Para
+        // evitar confundir eso con una oferta, exigimos UNA señal fuerte:
+        //  - el patrón completo "X min (Y km)" (la forma en que casi todas las apps
+        //    muestran una oferta real), o
+        //  - un botón de aceptar/rechazar visible (solo existe en la tarjeta de oferta), o
+        //  - km Y min sueltos los dos juntos (que los dos coincidan por separado es mucho
+        //    menos probable que sea ruido que uno solo).
+        val looksLikeOffer = fare != null && (pairs.isNotEmpty() || hasStrongKeyword || (tripKm != null && tripMin != null))
         if (!looksLikeOffer) return null
 
         return ParsedOffer(
