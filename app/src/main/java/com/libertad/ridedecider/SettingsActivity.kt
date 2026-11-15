@@ -6,6 +6,7 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Button
+import android.widget.ScrollView
 import android.widget.TextView
 
 /**
@@ -159,6 +160,13 @@ class SettingsActivity : AppCompatActivity() {
             }
         })
 
-        setContentView(root)
+        // Envolvemos todo en un ScrollView: con tantos campos (pesos, comisiones,
+        // overrides, qué mostrar en el cartel, modo diagnóstico, etc.) la pantalla no
+        // entraba completa y no había forma de bajar para ver o guardar el resto.
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(root)
+        }
+        setContentView(scroll)
     }
 }
