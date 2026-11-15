@@ -6,9 +6,12 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
+import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 
 /**
@@ -45,7 +48,26 @@ class OverlayService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_REFRESH) refresh()
+        // Chequeo defensivo: si por lo que sea el permiso de superposición no está
+        // activo en este momento, NO seguimos para no crashear (addView tiraría una
+        // excepción sin capturar). Antes esto no se chequeaba acá y un crash de este
+        // servicio tumbaba TODO el proceso de la app -> el Accessibility Service,
+        // que corre en el mismo proceso, se caía con él y Android lo mostraba como
+        // "desactivado" sin que vos lo hubieras tocado.
+        if (!Settings.canDrawOverlays(this)) {
+            Log.w("OverlayService", "Falta el permiso de superposición, no se dibuja nada")
+            Toast.makeText(this, "Ride Decider: falta el permiso de superposición", Toast.LENGTH_LONG).show()
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        if (intent?.action == ACTION_REFRESH) {
+            try {
+                refresh()
+            } catch (e: Exception) {
+                // Cualquier error al dibujar un badge no debe tumbar el proceso entero.
+                Log.e("OverlayService", "Error al refrescar el overlay", e)
+            }
+        }
         return START_STICKY
     }
 
@@ -101,7 +123,11 @@ class OverlayService : Service() {
         ).apply {
             gravity = Gravity.TOP or Gravity.START
         }
-        windowManager.addView(view, params)
+        try {
+            windowManager.addView(view, params)
+        } catch (e: Exception) {
+            Log.e("OverlayService", "No se pudo agregar el badge flotante", e)
+        }
         return view
     }
 
