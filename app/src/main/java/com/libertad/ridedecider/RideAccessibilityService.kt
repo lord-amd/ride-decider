@@ -64,11 +64,23 @@ class RideAccessibilityService : AccessibilityService() {
 
     private fun scanAllVisibleWindows() {
         val visibleWindows = windows ?: return
+
+        // Solo nos interesan las apps que el usuario eligió en "Elegir apps a abrir"
+        // (ver AppSelectionStore) — antes se leía CUALQUIER ventana visible, así que
+        // cosas como el launcher, "Instalador de paquetes" o cambios de pantalla de
+        // Android también terminaban generando un cartel. Si todavía no eligió
+        // ninguna app, seguimos leyendo todo (modo inicial, antes del primer uso).
+        val selectedPackages = AppSelectionStore.getSelected(this).toSet()
+        if (selectedPackages.isNotEmpty()) {
+            RideOfferStore.retainOnly(selectedPackages)
+        }
+
         for (window in visibleWindows) {
             val root = window.root ?: continue
             try {
                 val pkg = root.packageName?.toString() ?: continue
                 if (pkg in ignoredPackages) continue
+                if (selectedPackages.isNotEmpty() && pkg !in selectedPackages) continue
 
                 val bounds = root.screenBounds()
                 val parsed = GenericOfferParser.tryParse(root)
@@ -170,5 +182,11 @@ object RideOfferStore {
     @Synchronized
     fun clear(appPackage: String) {
         latest.remove(appPackage)
+    }
+
+    /** Saca cualquier entrada cuyo packageName no esté en el set dado (apps deseleccionadas). */
+    @Synchronized
+    fun retainOnly(packages: Set<String>) {
+        latest.keys.retainAll(packages)
     }
 }

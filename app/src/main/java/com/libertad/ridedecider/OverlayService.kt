@@ -42,6 +42,12 @@ class OverlayService : Service() {
     // reprogramar cada vez que llega un dato nuevo de esa app (ver DisplayConfig).
     private val hideTimers = mutableMapOf<String, Runnable>()
 
+    // Último texto mostrado por packageName, para notar si realmente cambió algo.
+    // Sin esto, el reescaneo periódico (cada 1.5s) reiniciaba el timer de
+    // auto-ocultado en cada pasada aunque no hubiera ningún dato nuevo, y el cartel
+    // nunca llegaba a desaparecer.
+    private val lastTexts = mutableMapOf<String, String>()
+
     private fun currentEngine() = DecisionEngine(
         weights = AppConfigHolder.weights,
         commissions = AppConfigHolder.commissions,
@@ -104,17 +110,27 @@ class OverlayService : Service() {
             val badge = badges.getOrPut(offer.appPackage) { createBadge(offer) }
             positionBadge(badge, offer)
 
-            badge.text = buildBadgeText(offer, evaluation, display, isBest = offer.appPackage == bestPackage)
+            val newText = buildBadgeText(offer, evaluation, display, isBest = offer.appPackage == bestPackage)
+            badge.text = newText
             badge.setBackgroundColor(colorForLight(evaluation.light))
-            badge.visibility = android.view.View.VISIBLE
 
-            scheduleAutoHide(offer.appPackage, badge, display.badgeDurationSeconds)
+            // Solo reiniciamos el cartel (mostrarlo + reprogramar el auto-ocultado) si
+            // el contenido realmente cambió. Si es el mismo texto que la pasada
+            // anterior (reescaneo de rutina sin novedades), no tocamos nada: si ya
+            // estaba oculto, sigue oculto; si está visible, el timer sigue corriendo
+            // sin reiniciarse.
+            if (lastTexts[offer.appPackage] != newText) {
+                lastTexts[offer.appPackage] = newText
+                badge.visibility = android.view.View.VISIBLE
+                scheduleAutoHide(offer.appPackage, badge, display.badgeDurationSeconds)
+            }
         }
 
         // Sacar badges de apps que ya no están siendo detectadas (cambiaron de pantalla, etc).
         val stale = badges.keys - seenPackages
         for (pkg in stale) {
             hideTimers.remove(pkg)?.let { uiHandler.removeCallbacks(it) }
+            lastTexts.remove(pkg)
             badges.remove(pkg)?.let { runCatching { windowManager.removeView(it) } }
         }
     }
