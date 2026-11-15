@@ -12,6 +12,13 @@ import android.widget.TextView
  * dinero/ganancia y precio por km (vía los pesos de UserWeights), más la comisión
  * estimada para calcular la ganancia neta real.
  *
+ * Los valores se guardan en SharedPreferences (ver AppConfigHolder.kt), así que
+ * sobreviven cerrar la app, reiniciar el celular, y actualizar Ride Decider a una
+ * versión nueva — los datos de la app no se borran al instalar una actualización
+ * encima, solo si la desinstalás del todo. Al abrir esta pantalla, los campos se
+ * precargan con lo último que guardaste (antes siempre arrancaban en los valores
+ * por defecto, incluso si ya habías guardado algo distinto).
+ *
  * Como las apps ya no se identifican con un enum fijo (ahora es "cualquier app que
  * detecte en pantalla"), la comisión por plataforma se reemplazó por UNA comisión
  * por defecto (aplica a cualquier app nueva que aparezca) + overrides opcionales por
@@ -19,15 +26,15 @@ import android.widget.TextView
  * líneas "packageName=comisión", por ejemplo:
  *   com.ubercab.driver=0.25
  *   com.cabify.driver=0.20
- *
- * TODO: persistir estos valores con androidx.datastore (ya está en las dependencias)
- * en vez de solo mantenerlos en memoria — dejado simple a propósito para que puedas
- * ajustar rápido la UI sin pelear con DataStore todavía.
  */
 class SettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val savedWeights = AppConfigHolder.weights
+        val savedCommissions = AppConfigHolder.commissions
+        val savedCost = AppConfigHolder.operatingCost
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -45,23 +52,31 @@ class SettingsActivity : AppCompatActivity() {
             return field
         }
 
-        val wNetKm = labeledField("Peso: ganancia neta por km (0-1)", "0.4")
-        val wNetHour = labeledField("Peso: ganancia neta por hora (0-1)", "0.35")
-        val wDistance = labeledField("Peso: preferencia de distancia (0-1)", "0.15")
-        val wPickup = labeledField("Peso: distancia hasta el pasajero (0-1)", "0.10")
+        val wNetKm = labeledField("Peso: ganancia neta por km (0-1)", savedWeights.weightNetPerKm.toString())
+        val wNetHour = labeledField("Peso: ganancia neta por hora (0-1)", savedWeights.weightNetPerHour.toString())
+        val wDistance = labeledField("Peso: preferencia de distancia (0-1)", savedWeights.weightDistance.toString())
+        val wPickup = labeledField("Peso: distancia hasta el pasajero (0-1)", savedWeights.weightPickupDistance.toString())
 
-        val defaultCommission = labeledField("Comisión por defecto (0-1, ej 0.20 = 20%)", "0.20")
+        val defaultCommission = labeledField(
+            "Comisión por defecto (0-1, ej 0.20 = 20%)",
+            savedCommissions.defaultCommission.toString()
+        )
+        val overridesText = savedCommissions.overrides.entries
+            .joinToString("\n") { "${it.key}=${it.value}" }
+            .ifBlank {
+                "com.ubercab.driver=0.25\ncom.cabify.driver=0.20\ncom.didiglobal.driver=0.20\nsinet.startup.inDriver=0.10"
+            }
         val overridesField = labeledField(
             "Comisiones por app conocida (una por línea: packageName=comisión)",
-            "com.ubercab.driver=0.25\ncom.cabify.driver=0.20\ncom.didiglobal.driver=0.20\nsinet.startup.inDriver=0.10",
+            overridesText,
             lines = 4
         )
 
-        val minNet = labeledField("Ganancia neta mínima aceptable ($)", "0")
-        val minNetKm = labeledField("Neto por km mínimo aceptable", "0")
-        val maxPickup = labeledField("Distancia máxima a buscar al pasajero (km)", "5")
+        val minNet = labeledField("Ganancia neta mínima aceptable ($)", savedWeights.minNetEarnings.toString())
+        val minNetKm = labeledField("Neto por km mínimo aceptable", savedWeights.minNetPerKm.toString())
+        val maxPickup = labeledField("Distancia máxima a buscar al pasajero (km)", savedWeights.maxPickupDistanceKm.toString())
 
-        val costPerKm = labeledField("Costo propio por km (combustible/desgaste)", "0")
+        val costPerKm = labeledField("Costo propio por km (combustible/desgaste)", savedCost.costPerKm.toString())
 
         root.addView(Button(this).apply {
             text = "Guardar"
@@ -94,8 +109,8 @@ class SettingsActivity : AppCompatActivity() {
                 )
                 val cost = OperatingCost(costPerKm = costPerKm.text.toString().toDoubleOrNull() ?: 0.0)
 
-                // TODO: persistir weights/commissions/cost con DataStore y que
-                // OverlayService los lea de ahí en vez de usar los valores default.
+                // Esto ahora escribe directo a SharedPreferences (ver AppConfigHolder.kt),
+                // así que queda guardado de verdad, no solo en memoria.
                 AppConfigHolder.weights = weights
                 AppConfigHolder.commissions = commissions
                 AppConfigHolder.operatingCost = cost
@@ -106,11 +121,4 @@ class SettingsActivity : AppCompatActivity() {
 
         setContentView(root)
     }
-}
-
-/** Puente simple en memoria entre SettingsActivity y OverlayService (reemplazar por DataStore). */
-object AppConfigHolder {
-    var weights: UserWeights = UserWeights()
-    var commissions: CommissionConfig = CommissionConfig()
-    var operatingCost: OperatingCost = OperatingCost()
 }

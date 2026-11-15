@@ -29,6 +29,7 @@
     <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
 
     <application
+        android:name=".RideDeciderApp"
         android:label="Ride Decider"
         android:icon="@mipmap/ic_launcher"
         android:theme="@style/Theme.RideDecider"

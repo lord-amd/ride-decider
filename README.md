@@ -26,6 +26,16 @@ Ride Decider" cierra el panel flotante y la pantalla principal; el Accessibility
 Service sigue corriendo en segundo plano a propósito (para apagarlo del todo hay que
 desactivarlo en Ajustes de Accesibilidad, igual que siempre).
 
+## Qué se guarda de verdad (y qué no)
+
+Tanto la selección de apps (`AppSelectionStore`) como la configuración de Settings —
+pesos, comisiones, costo por km (`AppConfigHolder`) — se guardan en `SharedPreferences`,
+que es almacenamiento propio de la app en el dispositivo. Eso significa que **sobrevive**:
+cerrar la app, reiniciar el celular, e instalar una actualización encima de la versión
+anterior (una actualización no borra los datos de la app, solo una desinstalación
+completa sí). La pantalla de Settings además se precarga con lo último que guardaste,
+no con los valores por defecto cada vez.
+
 ## Arquitectura (actualizada): lectura universal, no por app
 
 Ya no hay un parser por plataforma (`UberParser`, `CabifyParser`, etc.). Hay un único
