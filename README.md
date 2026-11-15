@@ -36,6 +36,16 @@ ventanas visibles (`typeWindowsChanged`, ya agregado) — por las dudas, además
 reaccionar a eventos, el servicio reescanea todas las ventanas cada 1.5 segundos como
 respaldo.
 
+## Bug real: la oferta se detectaba pero se perdía al toque
+
+Algunas apps muestran el cuadro de la oferta como una ventana SEPARADA, superpuesta
+sobre la ventana principal (el mapa de fondo) — ambas con el mismo packageName. El
+escaneo las recorre una por una, así que si la ventana del mapa (sin ninguna oferta)
+se procesaba DESPUÉS que la ventana con la oferta real, pisaba el resultado bueno con
+un "esperando datos" vacío en el mismo repaso. Esto podía pasar por el reescaneo
+periódico tanto como por los eventos de accesibilidad. Ahora un resultado vacío nunca
+borra una oferta real detectada hace menos de 5 segundos (`RideOfferStore.updateUnlessWorse`).
+
 ## Modo diagnóstico (ver qué texto detecta cada app, sin PC)
 
 En Settings hay un checkbox "Mostrar el texto detectado cuando una app no tiene

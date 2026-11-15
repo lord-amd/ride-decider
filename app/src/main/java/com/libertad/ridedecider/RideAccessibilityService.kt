@@ -90,7 +90,7 @@ class RideAccessibilityService : AccessibilityService() {
                 val parsed = GenericOfferParser.tryParse(root)
 
                 if (parsed != null) {
-                    RideOfferStore.update(
+                    RideOfferStore.updateUnlessWorse(
                         RideOffer(
                             appPackage = pkg,
                             appLabel = resolveAppLabel(pkg),
@@ -116,7 +116,7 @@ class RideAccessibilityService : AccessibilityService() {
                     // árbol con FLAG_SECURE o use vistas custom tipo Canvas/OpenGL).
                     ScreenOcrHelper.requestFallbackParse(bounds) { ocrParsed ->
                         if (ocrParsed != null) {
-                            RideOfferStore.update(
+                            RideOfferStore.updateUnlessWorse(
                                 RideOffer(
                                     appPackage = pkg,
                                     appLabel = resolveAppLabel(pkg),
@@ -141,7 +141,7 @@ class RideAccessibilityService : AccessibilityService() {
                             // puede ver, sin conectar el tablet a una PC, si la app
                             // simplemente no tiene ninguna oferta en pantalla ahora, o si
                             // SÍ hay texto pero el patrón de búsqueda no lo reconoce.
-                            RideOfferStore.update(
+                            RideOfferStore.updateUnlessWorse(
                                 RideOffer(
                                     appPackage = pkg,
                                     appLabel = resolveAppLabel(pkg),
@@ -191,6 +191,31 @@ object RideOfferStore {
 
     @Synchronized
     fun update(offer: RideOffer) {
+        latest[offer.appPackage] = offer
+    }
+
+    /**
+     * Igual que update(), pero evita un problema real: cuando una app muestra la
+     * oferta en una ventana SEPARADA (el cuadro de la oferta) superpuesta a su
+     * ventana principal (el mapa de fondo), ambas ventanas tienen el mismo
+     * packageName y el escaneo las procesa una tras otra. Si la ventana "vacía"
+     * (el mapa de fondo, sin oferta) se procesa DESPUÉS que la ventana con la
+     * oferta real, pisaba el resultado bueno con uno vacío en el mismo repaso,
+     * y el cartel nunca llegaba a mostrar la oferta.
+     *
+     * Por eso: no dejamos que un resultado SIN oferta (fareGross null) borre una
+     * oferta real detectada hace menos de 5 segundos. Pasado ese tiempo sin volver
+     * a detectarse, sí se permite volver al estado "esperando" (para no dejar una
+     * oferta vieja pegada para siempre si realmente ya no está en pantalla).
+     */
+    @Synchronized
+    fun updateUnlessWorse(offer: RideOffer) {
+        val current = latest[offer.appPackage]
+        val currentIsFreshReal = current?.fareGross != null &&
+            (System.currentTimeMillis() - current.capturedAtMillis) < 5000
+        if (offer.fareGross == null && currentIsFreshReal) {
+            return
+        }
         latest[offer.appPackage] = offer
     }
 
