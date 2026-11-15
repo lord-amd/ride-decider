@@ -3,6 +3,8 @@ package com.libertad.ridedecider
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Handler
+import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import com.libertad.ridedecider.ocr.ScreenOcrHelper
 import com.libertad.ridedecider.parsers.GenericOfferParser
@@ -28,6 +30,30 @@ class RideAccessibilityService : AccessibilityService() {
 
     // No tiene sentido evaluar nuestra propia ventana ni la del sistema (barra de estado, etc.)
     private val ignoredPackages = setOf("com.libertad.ridedecider", "com.android.systemui")
+
+    private val handler = Handler(Looper.getMainLooper())
+
+    // Respaldo además de los eventos de accesibilidad: no todos los fabricantes
+    // disparan typeWindowsChanged de forma confiable cuando cambia qué apps están
+    // visibles en multiventana, así que igual reescaneamos cada 1.5s mientras el
+    // servicio esté activo. Es poco costoso (recorre solo texto ya en memoria de
+    // Android, no hace captura de pantalla).
+    private val periodicScan = object : Runnable {
+        override fun run() {
+            scanAllVisibleWindows()
+            handler.postDelayed(this, 1500)
+        }
+    }
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        handler.post(periodicScan)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        handler.removeCallbacks(periodicScan)
+    }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         // No importa de qué ventana vino el evento puntual: ante cualquier cambio,
@@ -78,8 +104,27 @@ class RideAccessibilityService : AccessibilityService() {
                                     sourceConfidence = Confidence.LOW
                                 )
                             )
-                            notifyOverlay()
+                        } else {
+                            // Ni accesibilidad ni OCR encontraron una oferta en esta
+                            // ventana TODAVÍA. Igual guardamos un registro neutro (sin
+                            // datos) para que el overlay muestre un cartel gris de
+                            // "esperando" en esta región — así confirmás que esta app
+                            // sí está siendo leída, en vez de no ver nada y no saber si
+                            // es porque no hay oferta o porque algo no está andando.
+                            RideOfferStore.update(
+                                RideOffer(
+                                    appPackage = pkg,
+                                    appLabel = resolveAppLabel(pkg),
+                                    fareGross = null,
+                                    distanceKm = null,
+                                    etaMinutes = null,
+                                    windowBounds = bounds,
+                                    rawText = "",
+                                    sourceConfidence = Confidence.LOW
+                                )
+                            )
                         }
+                        notifyOverlay()
                     }
                 }
             } finally {

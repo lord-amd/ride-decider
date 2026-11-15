@@ -2,6 +2,7 @@ package com.libertad.ridedecider
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Button
@@ -35,6 +36,7 @@ class SettingsActivity : AppCompatActivity() {
         val savedWeights = AppConfigHolder.weights
         val savedCommissions = AppConfigHolder.commissions
         val savedCost = AppConfigHolder.operatingCost
+        val savedDisplay = AppConfigHolder.displayConfig
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -78,6 +80,23 @@ class SettingsActivity : AppCompatActivity() {
 
         val costPerKm = labeledField("Costo propio por km (combustible/desgaste)", savedCost.costPerKm.toString())
 
+        root.addView(TextView(this).apply {
+            text = "\nQué mostrar en el cartel (el cálculo del color siempre usa todos los datos, esto solo cambia qué ves escrito)"
+            textSize = 13f
+        })
+
+        val showFareCheck = CheckBox(this).apply { text = "Monto del viaje"; isChecked = savedDisplay.showFare }
+        val showDistanceCheck = CheckBox(this).apply { text = "Distancia (km)"; isChecked = savedDisplay.showDistance }
+        val showNetKmCheck = CheckBox(this).apply { text = "Neto por km"; isChecked = savedDisplay.showNetPerKm }
+        val showNetHourCheck = CheckBox(this).apply { text = "Neto por hora"; isChecked = savedDisplay.showNetPerHour }
+        val showScoreCheck = CheckBox(this).apply { text = "Score (0 a 100, más alto = más conviene)"; isChecked = savedDisplay.showScore }
+        listOf(showFareCheck, showDistanceCheck, showNetKmCheck, showNetHourCheck, showScoreCheck).forEach { root.addView(it) }
+
+        val badgeDuration = labeledField(
+            "Segundos que dura el cartel en pantalla antes de ocultarse (0 = no ocultar nunca)",
+            savedDisplay.badgeDurationSeconds.toString()
+        )
+
         root.addView(Button(this).apply {
             text = "Guardar"
             setOnClickListener {
@@ -114,6 +133,14 @@ class SettingsActivity : AppCompatActivity() {
                 AppConfigHolder.weights = weights
                 AppConfigHolder.commissions = commissions
                 AppConfigHolder.operatingCost = cost
+                AppConfigHolder.displayConfig = DisplayConfig(
+                    showFare = showFareCheck.isChecked,
+                    showDistance = showDistanceCheck.isChecked,
+                    showNetPerKm = showNetKmCheck.isChecked,
+                    showNetPerHour = showNetHourCheck.isChecked,
+                    showScore = showScoreCheck.isChecked,
+                    badgeDurationSeconds = badgeDuration.text.toString().toIntOrNull() ?: 10
+                )
 
                 finish()
             }

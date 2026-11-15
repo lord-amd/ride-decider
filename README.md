@@ -6,6 +6,29 @@ sin depender de parsers específicos por app, calcula ganancia neta real (despu�
 comisión y costo propio por km), y muestra un semáforo flotante (verde/amarillo/rojo)
 sobre cada porción de pantalla para decidir rápido.
 
+## Cartel flotante: tamaño, contenido y auto-ocultado
+
+El cartel es 3 veces más grande que la versión inicial (36sp, antes 12sp). Ahora
+muestra siempre un cartel **gris "Esperando datos…"** para cada app detectada en
+pantalla aunque todavía no haya ninguna oferta visible — así confirmás que esa región
+sí está siendo leída, en vez de no ver nada y no saber si falta algo.
+
+Qué campos aparecen en el cartel se configura en Settings (monto, distancia, neto por
+km, neto por hora, score) — pero **el cálculo del semáforo (color) siempre usa todos
+los datos disponibles**, apagar un campo del cartel nunca cambia qué tan conveniente
+se considera un viaje, solo qué número se ve escrito. El score ahora se muestra como
+"Conviene: N/100" en vez de solo un número suelto.
+
+También en Settings: cuántos segundos queda el cartel en pantalla antes de ocultarse
+solo (por defecto 10; poné 0 para que nunca se oculte). Se reinicia la cuenta cada vez
+que llega un dato nuevo de esa app.
+
+Si solo ves el cartel de una de las apps abiertas en pantalla dividida, puede ser que
+el sistema no esté avisándole al Accessibility Service cuándo cambia el conjunto de
+ventanas visibles (`typeWindowsChanged`, ya agregado) — por las dudas, además de
+reaccionar a eventos, el servicio reescanea todas las ventanas cada 1.5 segundos como
+respaldo.
+
 ## Elegir qué apps abrir
 
 Ya no hay una lista fija de 4 apps en el código. Desde el botón "3. Elegir apps a

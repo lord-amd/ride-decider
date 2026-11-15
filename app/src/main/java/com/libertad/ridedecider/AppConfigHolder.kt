@@ -70,4 +70,26 @@ object AppConfigHolder {
         set(value) {
             prefs().edit().putFloat("cost_per_km", value.costPerKm.toFloat()).apply()
         }
+
+    var displayConfig: DisplayConfig
+        get() = prefs().let { p ->
+            DisplayConfig(
+                showFare = p.getBoolean("show_fare", true),
+                showDistance = p.getBoolean("show_distance", true),
+                showNetPerKm = p.getBoolean("show_net_km", true),
+                showNetPerHour = p.getBoolean("show_net_hour", false),
+                showScore = p.getBoolean("show_score", true),
+                badgeDurationSeconds = p.getInt("badge_duration_seconds", 10)
+            )
+        }
+        set(value) {
+            prefs().edit()
+                .putBoolean("show_fare", value.showFare)
+                .putBoolean("show_distance", value.showDistance)
+                .putBoolean("show_net_km", value.showNetPerKm)
+                .putBoolean("show_net_hour", value.showNetPerHour)
+                .putBoolean("show_score", value.showScore)
+                .putInt("badge_duration_seconds", value.badgeDurationSeconds)
+                .apply()
+        }
 }

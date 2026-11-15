@@ -5,7 +5,9 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
@@ -31,9 +33,14 @@ class OverlayService : Service() {
     }
 
     private lateinit var windowManager: WindowManager
+    private val uiHandler = Handler(Looper.getMainLooper())
 
     // Un badge de vista por packageName actualmente visible en pantalla.
     private val badges = mutableMapOf<String, TextView>()
+
+    // Un Runnable de auto-ocultado pendiente por packageName, para poder cancelar y
+    // reprogramar cada vez que llega un dato nuevo de esa app (ver DisplayConfig).
+    private val hideTimers = mutableMapOf<String, Runnable>()
 
     private fun currentEngine() = DecisionEngine(
         weights = AppConfigHolder.weights,
@@ -73,6 +80,8 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        hideTimers.values.forEach { uiHandler.removeCallbacks(it) }
+        hideTimers.clear()
         badges.values.forEach { runCatching { windowManager.removeView(it) } }
         badges.clear()
     }
@@ -81,6 +90,10 @@ class OverlayService : Service() {
 
     private fun refresh() {
         val offers = RideOfferStore.snapshot()
+        val display = AppConfigHolder.displayConfig
+        // El semáforo (color) SIEMPRE se calcula con todos los datos disponibles acá
+        // abajo, sin importar qué campos eligió mostrar el usuario en Settings — lo
+        // único que DisplayConfig afecta es el texto que se arma más abajo.
         val bestPackage = currentEngine().pickBest(offers)?.offer?.appPackage
 
         val seenPackages = mutableSetOf<String>()
@@ -91,25 +104,67 @@ class OverlayService : Service() {
             val badge = badges.getOrPut(offer.appPackage) { createBadge(offer) }
             positionBadge(badge, offer)
 
-            val marker = if (offer.appPackage == bestPackage) "★ " else ""
-            badge.text = "$marker${offer.appLabel}\n" +
-                "$${"%.0f".format(offer.fareGross ?: 0.0)} · ${"%.1f".format(evaluation.netPerKm ?: 0.0)}/km neto\n" +
-                "score ${evaluation.score?.toInt() ?: "-"}"
+            badge.text = buildBadgeText(offer, evaluation, display, isBest = offer.appPackage == bestPackage)
             badge.setBackgroundColor(colorForLight(evaluation.light))
+            badge.visibility = android.view.View.VISIBLE
+
+            scheduleAutoHide(offer.appPackage, badge, display.badgeDurationSeconds)
         }
 
         // Sacar badges de apps que ya no están siendo detectadas (cambiaron de pantalla, etc).
         val stale = badges.keys - seenPackages
         for (pkg in stale) {
+            hideTimers.remove(pkg)?.let { uiHandler.removeCallbacks(it) }
             badges.remove(pkg)?.let { runCatching { windowManager.removeView(it) } }
         }
     }
 
+    /** Arma el texto del cartel solo con los campos que el usuario eligió mostrar. */
+    private fun buildBadgeText(offer: RideOffer, evaluation: RideEvaluation, display: DisplayConfig, isBest: Boolean): String {
+        if (offer.fareGross == null) {
+            // Todavía no se detectó ninguna oferta en esta app — cartel neutro de
+            // confirmación de que esta región SÍ está siendo leída.
+            return "${offer.appLabel}\nEsperando datos…"
+        }
+
+        val marker = if (isBest) "★ " else ""
+        val lines = mutableListOf("$marker${offer.appLabel}")
+
+        val datos = mutableListOf<String>()
+        if (display.showFare) datos += "$${"%.0f".format(offer.fareGross)}"
+        if (display.showDistance && offer.distanceKm != null) datos += "${"%.1f".format(offer.distanceKm)} km"
+        if (datos.isNotEmpty()) lines += datos.joinToString(" · ")
+
+        val netos = mutableListOf<String>()
+        if (display.showNetPerKm) netos += "${"%.0f".format(evaluation.netPerKm ?: 0.0)}/km neto"
+        if (display.showNetPerHour) netos += "${"%.0f".format(evaluation.netPerHour ?: 0.0)}/hora neto"
+        if (netos.isNotEmpty()) lines += netos.joinToString(" · ")
+
+        if (display.showScore) {
+            // "Score" explicado en criollo en vez de solo el número: 0 a 100, cuanto
+            // más alto más conviene este viaje según tus pesos configurados.
+            lines += "Conviene: ${evaluation.score?.toInt() ?: "-"}/100"
+        }
+
+        return lines.joinToString("\n")
+    }
+
+    /** Oculta el cartel solo (no lo borra del todo, por si llega un dato nuevo antes). */
+    private fun scheduleAutoHide(pkg: String, badge: TextView, durationSeconds: Int) {
+        hideTimers.remove(pkg)?.let { uiHandler.removeCallbacks(it) }
+        if (durationSeconds <= 0) return // 0 = nunca ocultar
+
+        val hideRunnable = Runnable { badge.visibility = android.view.View.GONE }
+        hideTimers[pkg] = hideRunnable
+        uiHandler.postDelayed(hideRunnable, durationSeconds * 1000L)
+    }
+
     private fun createBadge(offer: RideOffer): TextView {
         val view = TextView(this).apply {
-            textSize = 12f
+            // 3 veces más grande que el tamaño original (12sp / padding 20,12).
+            textSize = 36f
             setTextColor(Color.WHITE)
-            setPadding(20, 12, 20, 12)
+            setPadding(60, 36, 60, 36)
         }
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,

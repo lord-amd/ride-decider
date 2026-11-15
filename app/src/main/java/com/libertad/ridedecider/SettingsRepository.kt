@@ -43,3 +43,19 @@ fun CommissionConfig.forApp(packageName: String): Double =
 data class OperatingCost(
     val costPerKm: Double = 0.0 // en la moneda local; 0.0 = no descontar costo propio, solo comisión de la app
 )
+
+/**
+ * Qué información mostrar en el cartel flotante de cada app, y cuánto tiempo dejarlo
+ * en pantalla antes de ocultarse solo. IMPORTANTE: esto solo controla qué se MUESTRA.
+ * El cálculo del semáforo (DecisionEngine) siempre usa todos los datos disponibles
+ * sin importar qué campos estén tildados acá — apagar un campo no cambia el color
+ * resultante, solo si ese número aparece escrito en el cartel.
+ */
+data class DisplayConfig(
+    val showFare: Boolean = true,
+    val showDistance: Boolean = true,
+    val showNetPerKm: Boolean = true,
+    val showNetPerHour: Boolean = false,
+    val showScore: Boolean = true,
+    val badgeDurationSeconds: Int = 10 // 0 = no ocultar nunca
+)
