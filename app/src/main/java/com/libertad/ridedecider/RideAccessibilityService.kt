@@ -37,13 +37,15 @@ class RideAccessibilityService : AccessibilityService() {
 
     // Respaldo además de los eventos de accesibilidad: no todos los fabricantes
     // disparan typeWindowsChanged de forma confiable cuando cambia qué apps están
-    // visibles en multiventana, así que igual reescaneamos cada 1.5s mientras el
+    // visibles en multiventana, así que igual reescaneamos seguido mientras el
     // servicio esté activo. Es poco costoso (recorre solo texto ya en memoria de
-    // Android, no hace captura de pantalla).
+    // Android, no hace captura de pantalla). Se bajó de 1.5s a 500ms porque algunas
+    // ofertas de viaje aparecen y se cierran solas en pocos segundos, y con 1.5s a
+    // veces no llegaba a leerla a tiempo.
     private val periodicScan = object : Runnable {
         override fun run() {
             scanAllVisibleWindows()
-            handler.postDelayed(this, 1500)
+            handler.postDelayed(this, 500)
         }
     }
 
